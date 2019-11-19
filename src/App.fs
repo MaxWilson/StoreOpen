@@ -7,58 +7,52 @@ open Fable.Core
 open Fable.Core.JsInterop
 open Fable.Import
 open Fable.Import.Browser
-open Types
-open App.State
-open Global
+open Fable.React.Browser
 
 importAll "../sass/main.sass"
 
-open Fable.Helpers.React
-open Fable.Helpers.React.Props
+let thunk value _ = value
+let thunk1 f arg _ = f arg
 
-let menuItem label page currentPage =
-    li
-      [ ]
-      [ a
-          [ classList [ "is-active", page = currentPage ]
-            Href (toHash page) ]
-          [ str label ] ]
+type Page = Closed | Home | Cart | Product
+type Product = Office | Word
+type Cash = {
+        cashRegister: int
+        safe: int
+    } with static member fresh = {
+            cashRegister = 600
+            safe = 3600
+        }
 
-let menu currentPage =
-  aside
-    [ ClassName "menu" ]
-    [ p
-        [ ClassName "menu-label" ]
-        [ str "General" ]
-      ul
-        [ ClassName "menu-list" ]
-        [ menuItem "Home" Home currentPage
-          menuItem "Counter sample" Counter currentPage
-          menuItem "About" Page.About currentPage ] ]
+type Model = {
+    page: Page
+    isDeclaring: bool
+    cart: Product list
+    cash: Cash
+    declarations: Cash list
+    }
+    with static member fresh = {
+        page = Closed
+        isDeclaring = true
+        cart = []
+        cash = Cash.fresh
+        declarations = []
+        }
+type Msg = OpenStore
+let declarationPage (m:Model) onDone dispatch =
+    div[][
+        form[OnSubmit <| thunk1 dispatch onDone] [
+            button[Type "submit"]["OK"]
+            ]
+        ]
 
-let root model dispatch =
-
-  let pageHtml page =
-    match page with
-    | Page.About -> Info.View.root
-    | Counter -> Counter.View.root model.Counter (CounterMsg >> dispatch)
-    | Home -> Home.View.root model.Home (HomeMsg >> dispatch)
-
-  div
-    []
-    [ Navbar.View.root
-      div
-        [ ClassName "section" ]
-        [ div
-            [ ClassName "container" ]
-            [ div
-                [ ClassName "columns" ]
-                [ div
-                    [ ClassName "column is-3" ]
-                    [ menu model.CurrentPage ]
-                  div
-                    [ ClassName "column" ]
-                    [ pageHtml model.CurrentPage ] ] ] ] ]
+let view (m:Model) dispatch =
+    div[][
+        if m.page = Closed then
+            if m.isDeclaring then
+                declarationPage
+            button[OnClick (thunk1 dispatch OpenStore)]["Open store"]
+        ]
 
 open Elmish.React
 open Elmish.Debug
