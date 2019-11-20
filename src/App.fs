@@ -72,7 +72,10 @@ let view (m:Model) dispatch =
                 declarationPage m dispatch
             | Some ConfirmVariance ->
                 div[][
-                    h2[][str "Count Total is different than expected. Recount or perform declaration?"]
+                    if m.declarations.Length > 1 then
+                        h2[][str "Count Total is different than expected. Recount or perform declaration?"]
+                    else
+                        h2[][str "Count Total is different than expected. Please recount."]
                     br[]
                     div[][str <| sprintf "Registers $%d" m.declarations.Head.cashRegister.Value]
                     br[]
@@ -87,9 +90,11 @@ let view (m:Model) dispatch =
                             ]
                     br[]
                     button ContinueWizard "Recount"
-                    br[]
-                    br[]
-                    button Override "Declare with variance"
+                    if m.declarations.Length > 1 then
+                        h2[][str "Count Total is different than expected. Recount or perform declaration?"]
+                        br[]
+                        br[]
+                        button Override "Declare with variance"
                 ]
             | Some (ShiftOpenCloseStep.BankDrop bd) ->
                 form[OnSubmit (fun e -> e.preventDefault(); dispatch ContinueWizard)][
