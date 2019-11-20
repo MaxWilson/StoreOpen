@@ -14,7 +14,7 @@ let thunk1 f arg _ = f arg
 
 type Page = Closed | Home | Cart | Product
 type Product = Office | Word | Windows | Xbox
-type ShiftOpenCloseStep = CountingCash | ConfirmVariance | BankDrop of int
+type ShiftOpenCloseStep = CountingCash | ConfirmVariance | ExplainVariance | BankDrop of int
 type Cash = {
         cashRegister: int option
         safe: int option
@@ -41,6 +41,37 @@ type Model = {
         }
 type PaymentMethod = Cash | Card
 type Msg = BeginOpenOrClose | ContinueWizard | Goto of Page | AddProduct of Product | Pay of PaymentMethod | BankDrop of int | DeclareCash of int option | DeclareSafe of int option | Override
+
+let cost = function
+    | Word -> 50
+    | Office -> 100
+    | Windows -> 30
+    | Xbox -> 360
+
+// an input-like component which stores state locally until blur
+let localInput =
+    let component' =
+        FunctionComponent.Of(
+            fun (value, props, onChange) ->
+                let v = Hooks.useState value
+                Hooks.useEffect(
+                    fun () ->
+                        v.update(value) |> ignore // when value changes externally, make sure we detect that!
+                    , [|value|] )
+                let lst : IHTMLProp list = [
+                    yield upcast Value v.current
+                    yield upcast OnChange(fun e -> if e <> null then v.update(e.Value))
+                    yield upcast OnKeyDown(fun e -> if e.keyCode = 13. then
+                                                        e.preventDefault()
+                                                        onChange v.current
+                                                    )
+                    yield upcast OnBlur(fun _ -> onChange v.current)
+                    yield! props
+                    ]
+                input lst
+            , memoizeWith = (fun (v1, p1, _) (v2, p2, _) -> v1 = v2))
+    (fun value (props: seq<IHTMLProp>) onChange -> component'(value, props, onChange))
+
 let declarationPage (m:Model) dispatch =
     let decl = m.declarations.Head
     let adapt = function true, v -> Some v | _ -> None
@@ -58,11 +89,8 @@ let declarationPage (m:Model) dispatch =
             Fable.React.Standard.button[Type "submit"][str "Declare"]
             ]
         ]
-let cost = function
-    | Word -> 50
-    | Office -> 100
-    | Windows -> 30
-    | Xbox -> 360
+
+let valueOf (c:Cash) = (defaultArg c.cashRegister 0) + (defaultArg c.safe 0)
 let view (m:Model) dispatch =
     div[][
         div[ClassName "border"][
@@ -96,6 +124,18 @@ let view (m:Model) dispatch =
                         br[]
                         button Override "Declare with variance"
                 ]
+            | Some ExplainVariance ->
+                div[][
+                    h2[][str "Explain variance"]
+                    br[]
+                    h3[][str <| sprintf "Expected: $%d" (valueOf m.cash)]
+                    h3[][str <| sprintf "Counted: $%d" (valueOf m.declarations.Head)]
+                    let variance = valueOf m.declarations.Head - valueOf m.cash
+                    h3[Style[Color (if variance < 0 then "red" else "auto")]][str <| sprintf "Variance: $%d" variance]
+                    br[]
+                    br[]
+                    button ContinueWizard "Log variance"
+                    ]
             | Some (ShiftOpenCloseStep.BankDrop bd) ->
                 form[OnSubmit (fun e -> e.preventDefault(); dispatch ContinueWizard)][
                     div[][str "How much money do you want to bank drop?"]
@@ -115,7 +155,7 @@ let view (m:Model) dispatch =
                         match m.page with
                         | Home ->
                             h2 [][str "Home screen"]
-                            button ContinueWizard "Close store"
+                            button BeginOpenOrClose "Close store"
                         | Product ->
                             h2 [][str "Products"]
                             for p in [Word; Office; Xbox; Windows] do
@@ -144,7 +184,6 @@ let addCash (amt:int) (cash:Cash) =
 
 let init _ = Model.fresh
 let update msg (m:Model) =
-    let valueOf (c:Cash) = (defaultArg c.cashRegister 0) + (defaultArg c.safe 0)
     match m.shiftStep with
     | Some (ShiftOpenCloseStep.BankDrop v) ->
         match msg with
@@ -171,7 +210,11 @@ let update msg (m:Model) =
     | Some ConfirmVariance ->
         match msg with
         | ContinueWizard -> { m with declarations = Cash.fresh::m.declarations; shiftStep = Some CountingCash }
-        | Override ->
+        | Override -> { m with shiftStep = Some ExplainVariance }
+        | _ -> m
+    | Some ExplainVariance ->
+        match msg with
+        | ContinueWizard ->
             let cashAfterVariance = m.declarations.Head
             if m.page = Closed then
                 { m with declarations = []; cash = cashAfterVariance; shiftStep = None; page = Cart } // no bank drop on open
