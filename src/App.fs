@@ -68,7 +68,7 @@ let localInput =
                     yield upcast OnBlur(fun _ -> onChange v.current)
                     yield! props
                     ]
-                input lst
+                textarea lst []
             , memoizeWith = (fun (v1, p1, _) (v2, p2, _) -> v1 = v2))
     (fun value (props: seq<IHTMLProp>) onChange -> component'(value, props, onChange))
 
@@ -130,6 +130,8 @@ let view (m:Model) dispatch =
                     br[]
                     h3[][str <| sprintf "Expected: $%d" (valueOf m.cash)]
                     h3[][str <| sprintf "Counted: $%d" (valueOf m.declarations.Head)]
+                    h2[][str "Variance Reason"]
+                    localInput "" [] ignore
                     let variance = valueOf m.declarations.Head - valueOf m.cash
                     h3[Style[Color (if variance < 0 then "red" else "auto")]][str <| sprintf "Variance: $%d" variance]
                     br[]
